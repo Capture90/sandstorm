@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import shutil
 import pathlib
 import tempfile
@@ -76,6 +77,8 @@ def normalize(file_name):
         ord('я'): 'ia'
     }
 
+    file_name = re.sub(r'[^a-zA-Z0-9А-Яа-яЁёҐґЄєІіЇїЙй]', '_', file_name)
+
     return str(file_name).translate(map)
 
 
@@ -84,9 +87,11 @@ def process_dir(result_path, element, extensions_info):
 
     if element.name not in RESULTS_FOLDERS:
         folder_res = diver(result_path, element, extensions_info)
-
-        if folder_res is False:
-            element.rmdir()
+        if folder_res is False and element.exists():
+            try:
+                element.rmdir()
+            except OSError:
+                shutil.rmtree(str(element), ignore_errors=True)
 
         res |= folder_res
 
@@ -100,7 +105,7 @@ def process_file(result_path, element, extensions_info):
         ('AVI', 'MP4', 'MOV', 'MKV'),
         ('DOC', 'DOCX', 'TXT', 'PDF', 'XLSX', 'PPTX'),
         ('MP3', 'OGG', 'WAV', 'AMR'),
-        ('ZIP', 'GZ', 'TAR')
+        ('ZIP', 'GZ', 'TAR', 'RAR')
     )
 
     suffixes_dict = {
@@ -133,6 +138,14 @@ def process_file(result_path, element, extensions_info):
 
             shutil.copy(str(element), str(result_path))
 
+    else:
+        other_folder = result_path / "other"
+        other_folder.mkdir(parents=True, exist_ok=True)
+
+        result_path_other = other_folder / f"{normalize(element.stem)}{element.suffix}"
+
+        shutil.move(str(element), str(result_path_other))
+
     return True
 
 
@@ -144,6 +157,7 @@ def diver(result_path, folder_path, extensions_info):
         (result_path / folder).mkdir(parents=True, exist_ok=True)
 
     if not any(folder_path.iterdir()):
+        folder_path.rmdir() #THIS is added
         return res
 
     for element in folder_path.iterdir():
