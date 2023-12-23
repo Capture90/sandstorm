@@ -81,6 +81,38 @@ def normalize(file_name):
 
     return str(file_name).translate(map)
 
+####
+def is_file_corrupted(file_path):
+    try:
+        # Attempt to read the file
+        with open(file_path, 'rb') as file:
+            file_content = file.read()
+        return False  # File is not corrupted
+    except Exception:
+        return True  # File is corrupted
+
+def process_archive(result_path, element):
+    result_path /= "archives"
+
+    archive_folder = result_path / f"{normalize(element.stem)}"
+    archive_folder.mkdir(parents=True, exist_ok=True)
+
+    try:
+        shutil.unpack_archive(
+            str(element), str(archive_folder), element.suffix[1:].lower()
+        )
+
+        # Check for corrupted files and delete them
+        for file_name in os.listdir(archive_folder):
+            file_path = os.path.join(archive_folder, file_name)
+
+            if is_file_corrupted(file_path):
+                print(f"Corrupted file detected: {file_name}. Deleting.")
+                os.remove(file_path)
+
+    except Exception as e:
+        print(f"Error while processing archive {element}: {e}")
+####
 
 def process_dir(result_path, element, extensions_info):
     res = False
@@ -144,7 +176,7 @@ def process_file(result_path, element, extensions_info):
 
         result_path_other = other_folder / f"{normalize(element.stem)}{element.suffix}"
 
-        shutil.move(str(element), str(result_path_other))
+        shutil.copy(str(element), str(result_path_other))
 
     return True
 
@@ -206,7 +238,6 @@ def sorter(folder_platform_path):
 
             normalized_results_name = normalize(results_path.name)
 
-
             normalized_results_path = results_path.parent / normalized_results_name
 
             print(f"Results path after normalization: {normalized_results_path}")
@@ -214,10 +245,16 @@ def sorter(folder_platform_path):
 
             results_path.rename(normalized_results_path)
 
-
+            # Iterate over items in the normalized_results_path
             for item in normalized_results_path.iterdir():
                 new_name = normalize(item.name)
                 item.rename(normalized_results_path / new_name)
+
+            # Check if the element is a directory and its name is "archives"
+                if item.is_dir() and item.name == "archives":
+                    # Iterate over files in the "archives" directory and process them
+                    for archive_file in item.iterdir():
+                        process_archive(normalized_results_path, archive_file)
 
 
             post_processor(normalized_results_path, extensions_info)
@@ -226,7 +263,7 @@ def sorter(folder_platform_path):
             print(f"Error during copytree or post-processing: {e}")
 
 
-            results_path = pathlib.Path(normalize(results_path))
+            results_path = pathlib.Path(normalize(str(results_path)))
             print(f"Results path: {results_path}")
             print("Contents of results path:")
             for item in results_path.iterdir():
